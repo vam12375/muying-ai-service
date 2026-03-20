@@ -11,7 +11,7 @@ const CATEGORY_STYLES: Record<string, { bg: string; text: string; border: string
 };
 
 export function KnowledgePage() {
-  const { documents, isLoading, isUploading, error, uploadDocument, deleteDocument, refetch } = useKnowledge();
+  const { documents, isLoading, isUploading, error, apiKey, setApiKey, uploadDocument, deleteDocument, refetch } = useKnowledge();
   const [category, setCategory] = useState('faq');
   const [dragOver, setDragOver]   = useState(false);
   const [deleting, setDeleting]   = useState<string | null>(null);
@@ -68,13 +68,50 @@ export function KnowledgePage() {
         {/* 错误提示 */}
         {error && (
           <div
-            className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
+            className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-sm"
             style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}
           >
-            <AlertCircle size={14} />
-            {error}
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertCircle size={14} />
+              <div>
+                <p className="font-medium">
+                  {error.type === 'auth' ? '鉴权失败' : error.type === 'server' ? '服务异常' : '网络异常'}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'rgba(254,202,202,0.9)' }}>{error.message}</p>
+              </div>
+            </div>
+            {error.retryable && (
+              <button
+                onClick={refetch}
+                className="px-3 py-1 rounded-lg text-xs font-medium"
+                style={{ border: '1px solid rgba(239,68,68,0.35)', color: '#fecaca' }}
+              >
+                立即重试
+              </button>
+            )}
           </div>
         )}
+
+        <div
+          className="rounded-2xl px-5 py-4"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+        >
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-sm font-medium" style={{ color: '#e2e8f0' }}>知识库管理密钥</p>
+              <p className="text-xs mt-1" style={{ color: 'rgba(148,163,184,0.45)' }}>
+                上传和删除接口会自动携带 [`X-API-Key`](src/main/java/com/muying/ai/config/ApiKeyAuthInterceptor.java:15) 请求头。
+              </p>
+            </div>
+            <input
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="请输入知识库 API Key"
+              className="min-w-[260px] flex-1 max-w-md rounded-xl px-4 py-2 text-sm outline-none"
+              style={{ background: 'rgba(15,10,30,0.8)', color: '#e2e8f0', border: '1px solid rgba(139,92,246,0.2)' }}
+            />
+          </div>
+        </div>
 
         {/* 上传区 */}
         <div

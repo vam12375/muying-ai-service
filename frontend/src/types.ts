@@ -13,6 +13,12 @@ export interface ChatRequest {
   model?: string;
 }
 
+export interface ErrorState {
+  type: 'network' | 'server' | 'auth';
+  message: string;
+  retryable: boolean;
+}
+
 /** 知识库文档 */
 export interface KnowledgeDocument {
   id: string;
