@@ -2,6 +2,8 @@ package com.muying.ai.controller;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.BindException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -16,11 +18,20 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler({ IllegalArgumentException.class, MethodArgumentNotValidException.class, BindException.class })
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Map<String, String> handleIllegalArgument(IllegalArgumentException ex) {
-        log.warn("业务参数错误: {}", ex.getMessage());
-        return Map.of("error", ex.getMessage());
+    public Map<String, String> handleBadRequest(Exception ex) {
+        String message = ex.getMessage();
+        if (ex instanceof MethodArgumentNotValidException methodArgumentNotValidException
+                && methodArgumentNotValidException.getBindingResult().getFieldError() != null) {
+            message = methodArgumentNotValidException.getBindingResult().getFieldError().getDefaultMessage();
+        }
+        if (ex instanceof BindException bindException
+                && bindException.getBindingResult().getFieldError() != null) {
+            message = bindException.getBindingResult().getFieldError().getDefaultMessage();
+        }
+        log.warn("请求参数错误: {}", message);
+        return Map.of("error", message);
     }
 
     @ExceptionHandler(IOException.class)
