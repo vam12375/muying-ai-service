@@ -1,0 +1,44 @@
+# Git 提交信息模板
+# 格式: <type>(<scope>): <subject>
+#
+# type 类型:
+#   feat:     新功能
+#   fix:      修复bug
+#   refactor: 重构代码
+#   style:    样式调整(不影响功能)
+#   perf:     性能优化
+#   test:     测试相关
+#   docs:     文档更新
+#   chore:    构建/配置/工具
+#
+# scope 范围示例:
+#   功能: nav, home, product, coupon, points, seckill, circle, login, search
+#   技术: ui, api, store, deps, config, assets
+#
+# subject 主题:
+#   - 使用中文描述
+#   - 简明扼要说明本次变更
+#   - 不超过50个字符
+#
+# body 详细描述 (可选):
+#   - 使用列表形式 (- 开头)
+#   - 详细说明每个变更点
+#   - 说明变更原因和影响
+#
+# footer 补充信息 (可选):
+#   - 技术栈: 使用的主要技术
+#   - 设计原则: 遵循的设计理念
+#   - 影响范围: 影响的模块或功能
+#   - 相关文档: 关联的设计文档路径
+#
+# 示例:
+# feat(nav): 重构全局导航为极简玻璃态分层系统
+# 
+# - 新增三态状态机管理滚动与交互状态
+# - 提取秒杀公告组件,支持无缝滚动与倒计时
+# - 创建MegaMenuPanel组件,集成分类导航
+# - 重构Navbar为毛玻璃底材风格
+# - 优化响应式适配和交互体验
+# 
+# 技术栈: Vue 3 Composition API, SCSS, Pinia
+# 相关文档: docs/plans/2026-03-04-navbar-redesign.md

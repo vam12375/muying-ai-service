@@ -1,0 +1,14 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.iml
+.idea/
+*.class
+*.log
+application-dev.yml
+.claude/
+.sanshu-memory/
+docs/
+!docs/
+!docs/analysis.md
+!docs/plans/
+!docs/plans/*.md
