@@ -27,7 +27,7 @@ spring.ai:
       api-key: ${QIANWEN_API_KEY:sk-placeholder}
       options:
         model: text-embedding-v3
-  vectorstore
+  vectorstore:
     milvus:
       client:
         host: localhost
@@ -58,6 +58,17 @@ ai:
 mall:
   api:
     base-url: http://localhost:8080/api
+
+# RAG 降级告警（默认输出结构化错误日志，便于监控系统采集）
+rag:
+  alert:
+    enabled: true
+
+# 简单接口鉴权（建议生产环境覆盖默认值并开启）
+security:
+  api-key:
+    enabled: false
+    key: change-me
 
 # CORS 跨域白名单（生产部署时覆盖此值）
 web:

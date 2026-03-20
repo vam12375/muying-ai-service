@@ -1,6 +1,7 @@
 package com.muying.ai.service;
 
 import com.muying.ai.model.ChatRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -21,12 +22,14 @@ import java.util.stream.Collectors;
  * 聊天核心服务
  * 组装 Spring AI Advisor 链（Memory）+ 手动 RAG 检索 + Function Calling
  */
+@Slf4j
 @Service
 public class ChatService {
 
     private final ModelRouterService modelRouter;
     private final VectorStore vectorStore;
     private final ChatMemoryRepository chatMemoryRepository;
+    private final RagAlertNotifier ragAlertNotifier;
 
     /** 按模型名缓存 ChatClient（ChatMemory 状态存 Redis，实例本身无状态可复用） */
     private final Map<String, ChatClient> chatClientCache = new ConcurrentHashMap<>();
@@ -48,10 +51,12 @@ public class ChatService {
 
     public ChatService(ModelRouterService modelRouter,
                        VectorStore vectorStore,
-                       ChatMemoryRepository chatMemoryRepository) {
+                       ChatMemoryRepository chatMemoryRepository,
+                       RagAlertNotifier ragAlertNotifier) {
         this.modelRouter = modelRouter;
         this.vectorStore = vectorStore;
         this.chatMemoryRepository = chatMemoryRepository;
+        this.ragAlertNotifier = ragAlertNotifier;
     }
 
     /**
@@ -59,7 +64,7 @@ public class ChatService {
      */
     public Flux<String> streamChat(ChatRequest request) {
         ChatClient chatClient = buildChatClient(request.getModel());
-        String augmentedMessage = augmentWithRag(request.getMessage());
+        String augmentedMessage = buildAugmentedMessage(request.getMessage());
 
         return chatClient.prompt()
                 .user(augmentedMessage)
@@ -74,7 +79,7 @@ public class ChatService {
      */
     public String chat(ChatRequest request) {
         ChatClient chatClient = buildChatClient(request.getModel());
-        String augmentedMessage = augmentWithRag(request.getMessage());
+        String augmentedMessage = buildAugmentedMessage(request.getMessage());
 
         return chatClient.prompt()
                 .user(augmentedMessage)
@@ -88,7 +93,7 @@ public class ChatService {
      * RAG 检索增强
      * 从 Milvus 向量库中检索相关文档，拼接到用户消息中
      */
-    private String augmentWithRag(String userMessage) {
+    String buildAugmentedMessage(String userMessage) {
         try {
             List<Document> results = vectorStore.similaritySearch(
                     SearchRequest.builder()
@@ -102,21 +107,36 @@ public class ChatService {
                 return userMessage;
             }
 
-            // 将检索到的文档内容拼接为参考资料
             String context = results.stream()
                     .map(Document::getText)
                     .collect(Collectors.joining("\n\n---\n\n"));
+            String sources = results.stream()
+                    .map(this::formatSource)
+                    .distinct()
+                    .collect(Collectors.joining("、"));
 
             return """
                     用户问题：%s
 
+                    参考资料来源：%s
+
                     参考资料（来自知识库）：
                     %s
-                    """.formatted(userMessage, context);
+                    """.formatted(userMessage, sources, context);
         } catch (Exception e) {
-            // 向量库不可用时降级为纯对话模式
+            log.error("RAG 检索失败，已降级为纯对话模式。请检查向量库、Embedding 与知识库索引状态。", e);
+            ragAlertNotifier.notifyRagDegraded(userMessage, e);
             return userMessage;
         }
+    }
+
+    String formatSource(Document document) {
+        Object source = document.getMetadata().get("source");
+        if (source == null) {
+            return "未知来源";
+        }
+        String value = source.toString().trim();
+        return value.isEmpty() ? "未知来源" : value;
     }
 
     /**
