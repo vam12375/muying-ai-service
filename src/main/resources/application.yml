@@ -1,0 +1,71 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: muying-ai-service
+  threads:
+    virtual:
+      enabled: true
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 50MB
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 5000ms
+
+# Spring AI — Chat 自动配置禁用（由 AiModelConfig 手动构建），仅保留 Embedding 自动配置
+spring.ai:
+  openai:
+    chat:
+      enabled: false
+    embedding:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: ${QIANWEN_API_KEY:sk-placeholder}
+      options:
+        model: text-embedding-v3
+  vectorstore
+    milvus:
+      client:
+        host: localhost
+        port: 19530
+      database-name: default
+      collection-name: knowledge_base
+      embedding-dimension: 1024
+      metric-type: COSINE
+      index-type: IVF_FLAT
+
+# 多模型配置（自定义，供 ModelRouterService 使用）
+ai:
+  models:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:sk-placeholder}
+      base-url: https://api.deepseek.com
+      model: deepseek-chat
+    qianwen:
+      api-key: ${QIANWEN_API_KEY:sk-placeholder}
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      model: qwen-plus
+    zhipu:
+      api-key: ${ZHIPU_API_KEY:sk-placeholder}
+      base-url: https://open.bigmodel.cn/api/paas/v4
+      model: glm-4-flash
+
+# 母婴商城 API 地址（Function Calling 调用目标）
+mall:
+  api:
+    base-url: http://localhost:8080/api
+
+# CORS 跨域白名单（生产部署时覆盖此值）
+web:
+  cors:
+    allowed-origins: "http://localhost:5173,http://localhost:3000"
+
+# Knife4j 增强配置（访问 http://localhost:8090/doc.html）
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
