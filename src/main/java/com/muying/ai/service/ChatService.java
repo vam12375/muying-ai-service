@@ -1,6 +1,7 @@
 package com.muying.ai.service;
 
 import com.muying.ai.model.ChatRequest;
+import com.muying.ai.tool.ToolRequestContextHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -13,8 +14,11 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -49,10 +53,21 @@ public class ChatService {
             - 如果下方提供了"参考资料"，请优先基于参考资料回答
             """;
 
+    private static final String TOOL_ORDER_QUERY = "orderQuery";
+    private static final String TOOL_PRODUCT_QUERY = "productQuery";
+    private static final String TOOL_LOGISTICS_QUERY = "logisticsQuery";
+    private static final String TOOL_COUPON_QUERY = "couponQuery";
+    private static final int RAG_TOP_K = 3;
+    private static final double RAG_SIMILARITY_THRESHOLD = 0.6d;
+    private static final Set<String> ORDER_TOOL_SCENARIOS = Set.of(
+            "GENERAL_ASSISTANT", "ORDER_SERVICE", "LOGISTICS_SERVICE", "AFTER_SALES");
+    private static final Set<String> COUPON_TOOL_SCENARIOS = Set.of(
+            "GENERAL_ASSISTANT", "PROMOTION_SERVICE", "MEMBER_SERVICE");
+
     public ChatService(ModelRouterService modelRouter,
-                       VectorStore vectorStore,
-                       ChatMemoryRepository chatMemoryRepository,
-                       RagAlertNotifier ragAlertNotifier) {
+            VectorStore vectorStore,
+            ChatMemoryRepository chatMemoryRepository,
+            RagAlertNotifier ragAlertNotifier) {
         this.modelRouter = modelRouter;
         this.vectorStore = vectorStore;
         this.chatMemoryRepository = chatMemoryRepository;
@@ -65,13 +80,39 @@ public class ChatService {
     public Flux<String> streamChat(ChatRequest request) {
         ChatClient chatClient = buildChatClient(request.getModel());
         String augmentedMessage = buildAugmentedMessage(request.getMessage());
+        List<String> toolNames = resolveToolNames(request);
+        String modelName = normalizeModelName(request.getModel());
+        String maskedUserId = maskUserId(request.getUserId());
+        String loginStatus = normalizeLoginStatus(request.getLoginStatus());
+        String scenario = normalizeScenario(request.getScenario());
 
-        return chatClient.prompt()
-                .user(augmentedMessage)
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, request.getSessionId()))
-                .toolNames("orderQuery", "productQuery", "logisticsQuery", "couponQuery")
-                .stream()
-                .content();
+        return Flux.defer(() -> {
+            long startedAt = System.currentTimeMillis();
+            log.info(
+                    "开始流式聊天, sessionId={}, model={}, userId={}, loginStatus={}, scenario={}, tools={}, messageLength={}",
+                    request.getSessionId(), modelName, maskedUserId, loginStatus, scenario, toolNames,
+                    request.getMessage() == null ? 0 : request.getMessage().length());
+
+            ToolRequestContextHolder.set(request);
+            var prompt = chatClient.prompt()
+                    .user(augmentedMessage)
+                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, request.getSessionId()));
+
+            Flux<String> responseFlux = toolNames.isEmpty()
+                    ? prompt.stream().content()
+                    : prompt.toolNames(toolNames.toArray(String[]::new)).stream().content();
+
+            return responseFlux
+                    .doOnComplete(() -> log.info(
+                            "流式聊天完成, sessionId={}, model={}, userId={}, loginStatus={}, scenario={}, tools={}, durationMs={}",
+                            request.getSessionId(), modelName, maskedUserId, loginStatus, scenario, toolNames,
+                            System.currentTimeMillis() - startedAt))
+                    .doOnError(ex -> log.error(
+                            "流式聊天失败, sessionId={}, model={}, userId={}, loginStatus={}, scenario={}, tools={}, durationMs={}",
+                            request.getSessionId(), modelName, maskedUserId, loginStatus, scenario, toolNames,
+                            System.currentTimeMillis() - startedAt, ex))
+                    .doFinally(signalType -> ToolRequestContextHolder.clear());
+        });
     }
 
     /**
@@ -80,13 +121,39 @@ public class ChatService {
     public String chat(ChatRequest request) {
         ChatClient chatClient = buildChatClient(request.getModel());
         String augmentedMessage = buildAugmentedMessage(request.getMessage());
+        List<String> toolNames = resolveToolNames(request);
+        String modelName = normalizeModelName(request.getModel());
+        String maskedUserId = maskUserId(request.getUserId());
+        String loginStatus = normalizeLoginStatus(request.getLoginStatus());
+        String scenario = normalizeScenario(request.getScenario());
+        long startedAt = System.currentTimeMillis();
 
-        return chatClient.prompt()
-                .user(augmentedMessage)
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, request.getSessionId()))
-                .toolNames("orderQuery", "productQuery", "logisticsQuery", "couponQuery")
-                .call()
-                .content();
+        log.info("开始同步聊天, sessionId={}, model={}, userId={}, loginStatus={}, scenario={}, tools={}, messageLength={}",
+                request.getSessionId(), modelName, maskedUserId, loginStatus, scenario, toolNames,
+                request.getMessage() == null ? 0 : request.getMessage().length());
+
+        ToolRequestContextHolder.set(request);
+        try {
+            var prompt = chatClient.prompt()
+                    .user(augmentedMessage)
+                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, request.getSessionId()));
+
+            String content = toolNames.isEmpty()
+                    ? prompt.call().content()
+                    : prompt.toolNames(toolNames.toArray(String[]::new)).call().content();
+
+            log.info("同步聊天完成, sessionId={}, model={}, userId={}, loginStatus={}, scenario={}, tools={}, durationMs={}",
+                    request.getSessionId(), modelName, maskedUserId, loginStatus, scenario, toolNames,
+                    System.currentTimeMillis() - startedAt);
+            return content;
+        } catch (Exception ex) {
+            log.error("同步聊天失败, sessionId={}, model={}, userId={}, loginStatus={}, scenario={}, tools={}, durationMs={}",
+                    request.getSessionId(), modelName, maskedUserId, loginStatus, scenario, toolNames,
+                    System.currentTimeMillis() - startedAt, ex);
+            throw ex;
+        } finally {
+            ToolRequestContextHolder.clear();
+        }
     }
 
     /**
@@ -98,22 +165,27 @@ public class ChatService {
             List<Document> results = vectorStore.similaritySearch(
                     SearchRequest.builder()
                             .query(userMessage)
-                            .topK(3)
-                            .similarityThreshold(0.6)
-                            .build()
-            );
+                            .topK(RAG_TOP_K)
+                            .similarityThreshold(RAG_SIMILARITY_THRESHOLD)
+                            .build());
 
             if (results == null || results.isEmpty()) {
+                log.info("RAG检索完成, hitCount=0, thresholdHit=false, topK={}, threshold={}, queryLength={}",
+                        RAG_TOP_K, RAG_SIMILARITY_THRESHOLD, userMessage == null ? 0 : userMessage.length());
                 return userMessage;
             }
 
+            List<String> sourceList = results.stream()
+                    .map(this::formatSource)
+                    .distinct()
+                    .toList();
             String context = results.stream()
                     .map(Document::getText)
                     .collect(Collectors.joining("\n\n---\n\n"));
-            String sources = results.stream()
-                    .map(this::formatSource)
-                    .distinct()
-                    .collect(Collectors.joining("、"));
+            String sources = String.join("、", sourceList);
+
+            log.info("RAG检索命中, hitCount={}, thresholdHit=true, topK={}, threshold={}, sources={}",
+                    results.size(), RAG_TOP_K, RAG_SIMILARITY_THRESHOLD, sourceList);
 
             return """
                     用户问题：%s
@@ -130,6 +202,39 @@ public class ChatService {
         }
     }
 
+    List<String> resolveToolNames(ChatRequest request) {
+        if (request == null || request.getMessage() == null || request.getMessage().isBlank()) {
+            return List.of();
+        }
+
+        String message = request.getMessage().toLowerCase(Locale.ROOT);
+        Set<String> selectedTools = new LinkedHashSet<>();
+
+        if (containsAny(message, "订单", "支付", "退款", "售后")) {
+            selectedTools.add(TOOL_ORDER_QUERY);
+        }
+        if (containsAny(message, "物流", "快递", "配送", "到货", "发货", "运单")) {
+            selectedTools.add(TOOL_LOGISTICS_QUERY);
+            selectedTools.add(TOOL_ORDER_QUERY);
+        }
+        if (containsAny(message, "商品", "产品", "奶粉", "纸尿裤", "库存", "规格", "价格", "推荐")) {
+            selectedTools.add(TOOL_PRODUCT_QUERY);
+        }
+        if (containsAny(message, "优惠券", "优惠码", "满减券", "折扣券", "红包")) {
+            selectedTools.add(TOOL_COUPON_QUERY);
+        }
+
+        return selectedTools.stream()
+                .filter(toolName -> {
+                    boolean allowed = isToolAllowed(toolName, request);
+                    if (!allowed) {
+                        logToolDenied(toolName, request);
+                    }
+                    return allowed;
+                })
+                .toList();
+    }
+
     String formatSource(Document document) {
         Object source = document.getMetadata().get("source");
         if (source == null) {
@@ -137,6 +242,77 @@ public class ChatService {
         }
         String value = source.toString().trim();
         return value.isEmpty() ? "未知来源" : value;
+    }
+
+    private boolean containsAny(String message, String... keywords) {
+        for (String keyword : keywords) {
+            if (message.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isToolAllowed(String toolName, ChatRequest request) {
+        String scenario = normalizeScenario(request == null ? null : request.getScenario());
+        return switch (toolName) {
+            case TOOL_ORDER_QUERY, TOOL_LOGISTICS_QUERY ->
+                isLoggedIn(request) && hasUserId(request) && ORDER_TOOL_SCENARIOS.contains(scenario);
+            case TOOL_COUPON_QUERY ->
+                isLoggedIn(request) && hasUserId(request) && COUPON_TOOL_SCENARIOS.contains(scenario);
+            default -> true;
+        };
+    }
+
+    private void logToolDenied(String toolName, ChatRequest request) {
+        log.info("工具权限未通过, sessionId={}, tool={}, userId={}, loginStatus={}, scenario={}",
+                request == null ? "" : request.getSessionId(),
+                toolName,
+                maskUserId(request == null ? null : request.getUserId()),
+                normalizeLoginStatus(request == null ? null : request.getLoginStatus()),
+                normalizeScenario(request == null ? null : request.getScenario()));
+    }
+
+    private boolean hasUserId(ChatRequest request) {
+        return request != null && request.getUserId() != null && !request.getUserId().isBlank();
+    }
+
+    private boolean isLoggedIn(ChatRequest request) {
+        String loginStatus = normalizeLoginStatus(request == null ? null : request.getLoginStatus());
+        return "LOGGED_IN".equals(loginStatus)
+                || "AUTHENTICATED".equals(loginStatus)
+                || "SIGNED_IN".equals(loginStatus)
+                || "LOGIN".equals(loginStatus);
+    }
+
+    private String normalizeModelName(String modelName) {
+        return modelName == null || modelName.isBlank() ? "deepseek" : modelName;
+    }
+
+    private String normalizeLoginStatus(String loginStatus) {
+        return normalizeUpper(loginStatus, "ANONYMOUS");
+    }
+
+    private String normalizeScenario(String scenario) {
+        return normalizeUpper(scenario, "GENERAL_ASSISTANT");
+    }
+
+    private String normalizeUpper(String value, String defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        return value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String maskUserId(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return "anonymous";
+        }
+        String normalized = userId.trim();
+        if (normalized.length() <= 2) {
+            return normalized.charAt(0) + "***";
+        }
+        return normalized.substring(0, 2) + "***" + normalized.substring(normalized.length() - 2);
     }
 
     /**
@@ -157,8 +333,7 @@ public class ChatService {
         return ChatClient.builder(modelRouter.getModel(modelName))
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
-                        MessageChatMemoryAdvisor.builder(chatMemory).build()
-                )
+                        MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
     }
 }

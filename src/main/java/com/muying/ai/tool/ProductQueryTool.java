@@ -1,6 +1,5 @@
 package com.muying.ai.tool;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -15,8 +14,8 @@ public class ProductQueryTool implements Function<ProductQueryTool.Request, Prod
 
     private final RestClient restClient;
 
-    public ProductQueryTool(@Value("${mall.api.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+    public ProductQueryTool(RestClient mallRestClient) {
+        this.restClient = mallRestClient;
     }
 
     @Override
@@ -28,7 +27,7 @@ public class ProductQueryTool implements Function<ProductQueryTool.Request, Prod
                     .body(String.class);
             return new Response(result);
         } catch (Exception e) {
-            return new Response("查询商品失败：" + e.getMessage());
+            return new Response("查询商品失败，请稍后重试");
         }
     }
 

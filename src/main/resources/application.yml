@@ -58,17 +58,23 @@ ai:
 mall:
   api:
     base-url: http://localhost:8080/api
+    connect-timeout: 2s
+    read-timeout: 5s
 
 # RAG 降级告警（默认输出结构化错误日志，便于监控系统采集）
 rag:
   alert:
     enabled: true
 
-# 简单接口鉴权（建议生产环境覆盖默认值并开启）
+# 简单接口鉴权与基础限流（建议生产环境覆盖默认值并开启）
 security:
   api-key:
     enabled: false
-    key: change-me
+    key: ${AI_SERVICE_API_KEY:change-me}
+  rate-limit:
+    enabled: false
+    max-requests: 30
+    window-seconds: 60
 
 # CORS 跨域白名单（生产部署时覆盖此值）
 web:

@@ -20,6 +20,17 @@ public class ChatRequest {
     @Schema(description = "会话ID（用于多轮对话记忆）", example = "550e8400-e29b-41d4-a716-446655440000")
     private String sessionId;
 
-    @Schema(description = "模型名称", example = "deepseek", allowableValues = {"deepseek", "qianwen", "zhipu"})
+    @Size(max = 64, message = "用户ID长度不能超过 64 字")
+    @Schema(description = "用户身份 ID，用于后端工具权限校验", example = "user-10001")
+    private String userId;
+
+    @Schema(description = "登录状态", example = "LOGGED_IN", allowableValues = { "ANONYMOUS", "LOGGED_IN" })
+    private String loginStatus = "ANONYMOUS";
+
+    @Size(max = 64, message = "场景标识长度不能超过 64 字")
+    @Schema(description = "业务场景标识，用于工具权限与路由控制", example = "ORDER_SERVICE")
+    private String scenario = "GENERAL_ASSISTANT";
+
+    @Schema(description = "模型名称", example = "deepseek", allowableValues = { "deepseek", "qianwen", "zhipu" })
     private String model = "deepseek";
 }

@@ -1,14 +1,18 @@
 package com.muying.ai.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.io.IOException;
+import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -19,8 +23,32 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler({ IllegalArgumentException.class, MethodArgumentNotValidException.class, BindException.class })
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Map<String, String> handleBadRequest(Exception ex) {
+    public ResponseEntity<Map<String, Object>> handleBadRequest(Exception ex, HttpServletRequest request) {
+        String message = resolveValidationMessage(ex);
+        log.warn("请求参数错误, path={}, message={}", request.getRequestURI(), message);
+        return buildResponse(HttpStatus.BAD_REQUEST, "BAD_REQUEST", message, request);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex,
+            HttpServletRequest request) {
+        log.warn("上传文件超过限制, path={}", request.getRequestURI(), ex);
+        return buildResponse(HttpStatus.PAYLOAD_TOO_LARGE, "FILE_UPLOAD_TOO_LARGE", "上传文件超过大小限制", request);
+    }
+
+    @ExceptionHandler(IOException.class)
+    public ResponseEntity<Map<String, Object>> handleIOException(IOException ex, HttpServletRequest request) {
+        log.error("文件处理失败, path={}", request.getRequestURI(), ex);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "IO_ERROR", "文件处理失败，请稍后重试", request);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex, HttpServletRequest request) {
+        log.error("未预期异常, path={}", request.getRequestURI(), ex);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "服务内部错误，请稍后重试", request);
+    }
+
+    private String resolveValidationMessage(Exception ex) {
         String message = ex.getMessage();
         if (ex instanceof MethodArgumentNotValidException methodArgumentNotValidException
                 && methodArgumentNotValidException.getBindingResult().getFieldError() != null) {
@@ -30,21 +58,18 @@ public class GlobalExceptionHandler {
                 && bindException.getBindingResult().getFieldError() != null) {
             message = bindException.getBindingResult().getFieldError().getDefaultMessage();
         }
-        log.warn("请求参数错误: {}", message);
-        return Map.of("error", message);
+        return (message == null || message.isBlank()) ? "请求参数不合法" : message;
     }
 
-    @ExceptionHandler(IOException.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public Map<String, String> handleIOException(IOException ex) {
-        log.error("文件处理失败", ex);
-        return Map.of("error", "文件处理失败: " + ex.getMessage());
-    }
-
-    @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public Map<String, String> handleGeneral(Exception ex) {
-        log.error("未预期异常", ex);
-        return Map.of("error", "服务内部错误，请稍后重试");
+    private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status,
+            String code,
+            String message,
+            HttpServletRequest request) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", code);
+        body.put("message", message);
+        body.put("path", request.getRequestURI());
+        body.put("timestamp", OffsetDateTime.now().toString());
+        return ResponseEntity.status(status).body(body);
     }
 }

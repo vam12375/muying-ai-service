@@ -94,4 +94,60 @@ class ChatServiceTest {
 
         verify(vectorStore).similaritySearch(any(SearchRequest.class));
     }
+
+    @Test
+    void resolveToolNamesReturnsOrderAndLogisticsToolsForDeliveryQuestionWhenUserIsAuthorized() {
+        ChatRequest request = new ChatRequest();
+        request.setMessage("订单物流什么时候到？");
+        request.setUserId("user-10001");
+        request.setLoginStatus("LOGGED_IN");
+        request.setScenario("ORDER_SERVICE");
+
+        List<String> tools = chatService.resolveToolNames(request);
+
+        assertThat(tools).containsExactly("orderQuery", "logisticsQuery");
+    }
+
+    @Test
+    void resolveToolNamesSkipsRestrictedToolsForAnonymousDeliveryQuestion() {
+        ChatRequest request = new ChatRequest();
+        request.setMessage("订单物流什么时候到？");
+
+        List<String> tools = chatService.resolveToolNames(request);
+
+        assertThat(tools).isEmpty();
+    }
+
+    @Test
+    void resolveToolNamesReturnsProductAndCouponToolsForPromotionQuestionWhenUserIsAuthorized() {
+        ChatRequest request = new ChatRequest();
+        request.setMessage("这款奶粉价格多少，有优惠券吗？");
+        request.setUserId("user-10001");
+        request.setLoginStatus("LOGGED_IN");
+        request.setScenario("PROMOTION_SERVICE");
+
+        List<String> tools = chatService.resolveToolNames(request);
+
+        assertThat(tools).containsExactly("productQuery", "couponQuery");
+    }
+
+    @Test
+    void resolveToolNamesSkipsCouponToolWhenPromotionQuestionUserIsAnonymous() {
+        ChatRequest request = new ChatRequest();
+        request.setMessage("这款奶粉价格多少，有优惠券吗？");
+
+        List<String> tools = chatService.resolveToolNames(request);
+
+        assertThat(tools).containsExactly("productQuery");
+    }
+
+    @Test
+    void resolveToolNamesReturnsEmptyWhenQuestionDoesNotNeedTools() {
+        ChatRequest request = new ChatRequest();
+        request.setMessage("新生儿洗澡需要注意什么？");
+
+        List<String> tools = chatService.resolveToolNames(request);
+
+        assertThat(tools).isEmpty();
+    }
 }
