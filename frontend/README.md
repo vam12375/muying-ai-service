@@ -1,122 +1,82 @@
-# React + TypeScript + Vite
+# 前端子应用说明
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+这里是 `muying-ai-service` 的前端演示应用，基于 React 19 + TypeScript + Vite 构建，主要提供两个页面：
 
-Currently, two official plugins are available:
+- 聊天页面：演示多模型切换、SSE 流式回复、会话上下文展示。
+- 知识库页面：演示文档上传、列表查询、删除、API Key 管理。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+完整项目说明、后端架构、接口文档和启动步骤请优先查看上一级 [`../README.md`](../README.md)。
 
-## React Compiler
+## 技术栈
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 19
+- TypeScript
+- Vite 7
+- Tailwind CSS 4
+- lucide-react
 
-## Expanding the ESLint configuration
+## 本地启动
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+默认端口：`5173`
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+开发代理配置位于 `vite.config.ts`，会自动把 `/api` 请求转发到：
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```text
+http://localhost:8090
 ```
-  ---
-  AI 智能客服系统 (muying-ai-service) — 完成                                                                  
-                                                                                                                后端（17 个 Java 文件）                                                                                     
-                                                                                                              
-  ┌──────────────┬─────────────────────────────────────┬─────────────────────────────────────────────────┐      │     模块     │                文件                 │                     技术点                      │      ├──────────────┼─────────────────────────────────────┼─────────────────────────────────────────────────┤      │ 启动入口     │ MuyingAiApplication.java            │ Spring Boot 3.3.6 + Java 21                     │      ├──────────────┼─────────────────────────────────────┼─────────────────────────────────────────────────┤    
-  │ 模型配置     │ AiModelConfig.java,                 │ 多模型注册（OpenAI 兼容协议）                   │
-  │              │ AiModelProperties.java              │                                                 │    
-  ├──────────────┼─────────────────────────────────────┼─────────────────────────────────────────────────┤    
-  │ 模型路由     │ ModelRouterService.java             │ 策略模式，DeepSeek/千问/智谱                    │    
-  ├──────────────┼─────────────────────────────────────┼─────────────────────────────────────────────────┤    
-  │ 聊天核心     │ ChatService.java                    │ Spring AI Advisor 链 + 手动 RAG + .toolNames()  │    
-  │              │                                     │ Function Calling                                │    
-  ├──────────────┼─────────────────────────────────────┼─────────────────────────────────────────────────┤    
-  │ 对话记忆     │ ChatMemoryConfig.java               │ MessageChatMemoryAdvisor +                      │    
-  │              │                                     │ MessageWindowChatMemory                         │    
-  ├──────────────┼─────────────────────────────────────┼─────────────────────────────────────────────────┤    
-  │ Function     │ ToolConfig.java + 4 个 Tool 类      │ @Bean + @Description                            │    
-  │ Calling      │                                     │ 模式，订单/商品/物流/优惠券                     │    
-  ├──────────────┼─────────────────────────────────────┼─────────────────────────────────────────────────┤    
-  │ RAG 管道     │ EmbeddingPipeline.java,             │ LangChain4j 解析 → Spring AI VectorStore        │    
-  │              │ KnowledgeService.java               │                                                 │    
-  ├──────────────┼─────────────────────────────────────┼─────────────────────────────────────────────────┤    
-  │ API 接口     │ ChatController.java,                │ SSE 流式 + REST                                 │    
-  │              │ KnowledgeController.java            │                                                 │    
-  ├──────────────┼─────────────────────────────────────┼─────────────────────────────────────────────────┤    
-  │ 基础设施     │ docker-compose.yml                  │ Milvus 2.4.17 + Redis 7.4                       │    
-  └──────────────┴─────────────────────────────────────┴─────────────────────────────────────────────────┘    
 
-  前端（5 个组件 + 1 个 Hook）
+## 可用脚本
 
-  ┌───────────────────┬────────────────────────────────────┐
-  │       文件        │                功能                │
-  ├───────────────────┼────────────────────────────────────┤
-  │ ChatWindow.tsx    │ 主界面：导航栏 + 消息列表 + 欢迎页 │
-  ├───────────────────┼────────────────────────────────────┤
-  │ MessageBubble.tsx │ 消息气泡（用户/助手双样式）        │
-  ├───────────────────┼────────────────────────────────────┤
-  │ MessageInput.tsx  │ 输入框 + 发送/停止按钮             │
-  ├───────────────────┼────────────────────────────────────┤
-  │ ModelSelector.tsx │ 模型切换下拉框                     │
-  ├───────────────────┼────────────────────────────────────┤
-  │ useChat.ts        │ SSE 流式接收 Hook                  │
-  └───────────────────┴────────────────────────────────────┘
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run preview
+```
 
-  启动方式
+## 页面结构
 
-  1. docker-compose up -d — 启动 Milvus + Redis
-  2. 后端 mvn spring-boot:run — 端口 8090
-  3. 前端 cd frontend && npm run dev — 端口 5173（代理 → 8090）
+```text
+src/
+├─ App.tsx                 # 页面容器，切换 chat / knowledge 两个页签
+├─ components/
+│  ├─ ChatPage.tsx         # 聊天页
+│  ├─ KnowledgePage.tsx    # 知识库页
+│  ├─ MessageBubble.tsx    # 消息气泡
+│  ├─ MessageInput.tsx     # 输入框
+│  └─ Sidebar.tsx          # 左侧导航
+├─ hooks/
+│  ├─ useChat.ts           # SSE 对话逻辑
+│  └─ useKnowledge.ts      # 知识库管理逻辑
+└─ types.ts                # 前端类型定义
+```
+
+## 本地存储约定
+
+前端会通过 `localStorage` 保存聊天和知识库上下文：
+
+| Key | 作用 |
+| --- | --- |
+| `ai-chat-user-id` | 当前聊天用户 ID |
+| `ai-chat-login-status` | 登录状态，影响工具调用权限 |
+| `ai-chat-scenario` | 业务场景，用于订单 / 物流 / 优惠券工具放行 |
+| `knowledge-api-key` | 知识库上传 / 删除接口使用的 API Key |
+
+如果你希望本地验证需要登录上下文的工具调用，可以先在浏览器控制台执行：
+
+```javascript
+localStorage.setItem('ai-chat-user-id', 'user-10001')
+localStorage.setItem('ai-chat-login-status', 'LOGGED_IN')
+localStorage.setItem('ai-chat-scenario', 'ORDER_SERVICE')
+```
+
+## 交互特点
+
+- 聊天页会展示 `start`、`error`、`done` 三类 SSE 生命周期提示。
+- 知识库页会对鉴权失败、服务异常、网络异常做区分提示。
+- API Key 仅保存在浏览器本地，不会写入仓库文件。
